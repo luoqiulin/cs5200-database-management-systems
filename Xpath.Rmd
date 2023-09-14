@@ -1,0 +1,83 @@
+---
+title: "Assignment"
+output: html_notebook
+---
+/* Q1 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx1 <- "//catalog//book[author='Galos, Mike']/title"
+results1 <- xpathSApply(xmlObj, xpathEx1, xmlValue)
+results1
+print('----------------------------')
+xpathEx2 <- "//catalog//book[author='Galos, Mike']/price"
+results2 <- xpathSApply(xmlObj, xpathEx2, xmlValue)
+results2
+```
+/* Q2 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx1 <- "//catalog//book[@id='bk109']/genre"
+results1 <- xpathSApply(xmlObj, xpathEx1, xmlValue)
+results1
+```
+/* Q3 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx1 <- "//catalog//book[price=min(//catalog//book/price)]/title"
+results1 <- xpathSApply(xmlObj, xpathEx1, xmlValue)
+results1
+```
+/* Q4 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx1 <- "//catalog//book[genre='Computer']/title"
+results1 <- xpathSApply(xmlObj, xpathEx1, xmlValue)
+results1
+print('----------------------------')
+xpathEx2 <- "//catalog//book[genre='Computer']/price"
+results2 <- xpathSApply(xmlObj, xpathEx2, xmlValue)
+results2
+```
+/* Q5 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx1 <- "count(//catalog//book[price<5])"
+results1 <- xpathSApply(xmlObj, xpathEx1, xmlValue)
+results1
+```
+

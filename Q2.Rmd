@@ -1,0 +1,19 @@
+---
+title: "Assignment"
+output: html_notebook
+---
+
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "log.xml"
+fpn = paste0(path, fn)
+
+xmlObj <- xmlParse(fpn)
+
+xpathEx <- "count(//log//Visit[@pid=1])"
+results <- xpathSApply(xmlObj, xpathEx, xmlValue)
+head(results)
+```
+

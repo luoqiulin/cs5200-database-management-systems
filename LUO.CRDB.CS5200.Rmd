@@ -1,0 +1,123 @@
+---
+title: "Assignment"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+library(RSQLite)
+
+fpath = "C:/Users/11099/Downloads"
+dbfile = "MediaDB.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{sql connection=dbcon}
+PRAGMA foreign_keys = ON
+```
+
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Course;
+```
+
+
+```{sql connection=dbcon}
+CREATE TABLE Course(
+Cnumber TEXT PRIMARY KEY,
+title TEXT NOT NULL,
+lengthinDays INTEGER NOT NULL
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Course (Cnumber, title, lengthinDays) VALUES
+("01", "MySQL", 100),
+("02", "SQLITE", 101)
+```
+
+```{sql connection=dbcon}
+SELECT * FROM Course;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Lesson;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Lesson(
+tid INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+lengthinHrs INTEGER NOT NULL,
+subject TEXT NOT NULL,
+CONSTRAINT subject CHECK (subject IN ('ML', 'SQL', 'R', 'Java'))
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Lesson (tid, title, lengthinHrs, subject) VALUES
+(1, "title1", 10, "SQL"),
+(2, "title2", 11, "SQL"),
+(3, "title3", 12, "ML"),
+(4, "title1", 10, "R"),
+(5, "title4", 12, "Java")
+```
+
+
+```{sql connection=dbcon}
+SELECT * FROM Lesson;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Unit;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Unit(
+Unumber TEXT,
+tid INTEGER NOT NULL,
+CONSTRAINT Unumber FOREIGN KEY(Unumber) REFERENCES Course(Cnumber) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT tid FOREIGN KEY(tid) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+PRIMARY KEY (Unumber, tid)
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Unit (Unumber, tid) VALUES
+("01", 1),
+("02", 2)
+```
+
+
+```{sql connection=dbcon}
+SELECT * FROM Unit;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Pre_Info;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Pre_Info(
+This_Lesson_id INTEGER,
+Pre_Lesson_id INTEGER,
+CONSTRAINT This_Lesson_id FOREIGN KEY(This_Lesson_id) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT Pre_Lesson_id FOREIGN KEY(Pre_Lesson_id) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+PRIMARY KEY (This_Lesson_id, Pre_Lesson_id)
+);
+```
+
+```{sql connection=dbcon}
+INSERT INTO Pre_Info (This_Lesson_id, Pre_Lesson_id) VALUES
+(2, 3)
+
+```
+
+
+```{sql connection=dbcon}
+SELECT * FROM Pre_Info;
+```
+

@@ -1,0 +1,69 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE log [
+    <!ELEMENT log (Page*,Visit*,Visitor*)>
+    <!ELEMENT Page (url)>
+    <!ATTLIST Page pid ID #REQUIRED>
+    <!ELEMENT url (#PCDATA)>
+    <!ELEMENT Visit (vdate,vtime)>
+    <!ATTLIST Visit tid ID #REQUIRED>
+    <!ATTLIST Visit pid IDREF #REQUIRED>
+    <!ATTLIST Visit vid IDREF #REQUIRED>
+    <!ELEMENT vdate (#PCDATA)>
+    <!ELEMENT vtime (#PCDATA)>
+    <!ELEMENT Visitor (ip)>
+    <!ATTLIST Visitor vid ID #REQUIRED>
+    <!ELEMENT ip (#PCDATA)>
+]>
+
+<log>
+   <Page pid="1">
+       <url>http://artificium.us/lessons/l1.html</url>
+   </Page>
+   <Page pid="2">
+       <url>http://artificium.us/lessons/l2.html</url>
+   </Page>
+   <Page pid="3">
+       <url>http://artificium.us/lessons/l3.html</url>
+   </Page>
+   <Page pid="4">
+       <url>http://artificium.us/lessons/l4.html</url>
+   </Page>
+   <Page pid="5">
+       <url>http://artificium.us/lessons/l5.html</url>
+   </Page>
+   <Visitor vid="1">
+       <ip>165.11.33.45</ip>
+   </Visitor>
+   <Visitor vid="2">
+       <ip>165.11.33.46</ip>
+   </Visitor>
+   <Visitor vid="3">
+       <ip>165.11.33.47</ip>
+   </Visitor>
+   <Visitor vid="4">
+       <ip>165.11.33.48</ip>
+   </Visitor>
+   <Visitor vid="5">
+       <ip>165.11.33.49</ip>
+   </Visitor>
+   <Visit tid="1" pid="1" vid="2">
+       <vdate>2021-09-30</vdate>
+       <vtime>20:03:44</vtime>
+   </Visit>
+   <Visit tid="2" pid="1" vid="3">
+       <vdate>2021-09-25</vdate>
+       <vtime>12:03:44</vtime>
+   </Visit>
+   <Visit tid="3" pid="3" vid="5">
+       <vdate>2021-05-11</vdate>
+       <vtime>23:07:22</vtime>
+   </Visit>
+   <Visit tid="4" pid="2" vid="4">
+       <vdate>2021-01-07</vdate>
+       <vtime>00:55:11</vtime>
+   </Visit>
+   <Visit tid="5" pid="4" vid="1">
+       <vdate>2021-11-04</vdate>
+       <vtime>06:44:20</vtime>
+   </Visit>
+</log>

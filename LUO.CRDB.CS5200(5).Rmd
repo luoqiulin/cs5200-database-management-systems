@@ -1,0 +1,382 @@
+---
+title: "Practicum 1"
+output: html_notebook
+---
+/* Task 1 */
+/* Firstly connect to local Mysql database */
+```{r echo=FALSE}
+library(RMySQL)
+
+dbcon <- dbConnect(MySQL(), dbname = "practicum1", username="root", password="9909", host="127.0.0.1", port=3306)
+```
+/* Then ceate tables */
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS airlines;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE airlines(
+aid INT PRIMARY KEY,
+code VARCHAR(100) NOT NULL,
+airline VARCHAR(100) NOT NULL UNIQUE
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS airports;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE airports(
+pid INT PRIMARY KEY,
+code VARCHAR(100) NOT NULL,
+name VARCHAR(100) NOT NULL,
+city VARCHAR(100) NOT NULL,
+state VARCHAR(100) NOT NULL,
+country VARCHAR(100) NOT NULL,
+UNIQUE(name,state)
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS incidents;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE incidents(
+iid INT PRIMARY KEY,
+idate VARCHAR(100) NOT NULL,
+depPort VARCHAR(100) NOT NULL,
+arrPort VARCHAR(100) NOT NULL,
+airline VARCHAR(100) NOT NULL,
+aircraft VARCHAR(100) NOT NULL,
+state VARCHAR(100) NOT NULL,
+flightPhase ENUM('takeoff','inflight','landing','unknown') NOT NULL,
+impact VARCHAR(100) NOT NULL,
+FOREIGN KEY (depPort,state) REFERENCES airports(name,state) ON DELETE CASCADE ON UPDATE CASCADE,
+FOREIGN KEY (arrPort,state) REFERENCES airports(name,state) ON DELETE CASCADE ON UPDATE CASCADE,
+FOREIGN KEY (airline) REFERENCES airlines(airline) ON DELETE CASCADE ON UPDATE CASCADE
+);
+```
+
+/* Task 2 */
+```{r}
+library(readr)
+library(sqldf)
+library(stringr)
+
+BirdStrikesData <- read.csv("BirdStrikesData.csv")
+colnames(BirdStrikesData)
+
+
+df.airlines <- sqldf::sqldf("SELECT DISTINCT 1 AS aid, `Aircraft..Airline.Operator` FROM BirdStrikesData WHERE `Aircraft..Airline.Operator` <> '' GROUP BY `Aircraft..Airline.Operator`",drv = "SQLite")
+n.airlines <- nrow(df.airlines)
+df.airlines[,1] <- seq(1, n.airlines)
+
+colnames(df.airlines)[2] <- 'airline'
+
+df.airlines
+
+# Because the attribute `Aircraft..Airline.Operator` in the csv file has a value of space '', so I equal this value to another existed value 'Unknown' and filter the value ''.
+
+df.airports <- sqldf::sqldf("SELECT DISTINCT 1 AS pid, `Airport..Name`, `Origin.State` FROM BirdStrikesData  WHERE `Origin.State` <> ''",drv = "SQLite")
+n.airports <- nrow(df.airports)
+df.airports[,1] <- seq(1, n.airports)
+for(r in 1:n.airports){
+  if(df.airports$Airport..Name[r] == ''){
+    df.airports$Airport..Name[r] = 'Unknown'
+  }
+}
+
+colnames(df.airports)[2] <- 'name'
+colnames(df.airports)[3] <- 'state'
+
+df.airports$name[12] <- "CHICAGO O HARE INTL ARPT"
+df.airports$name[499] <- "KINGS LAND O LAKES ARPT"
+df.airports$name[650] <- "DAVID S ARPT"
+df.airports$name[1010] <- "LEE S SUMMIT MUNICIPAL ARPT"
+
+df.airports
+
+# Because the attribute `Airport..Name` in the csv file has a value of space '', so I add a new value "Unknown" and equal value '' to this new value 'Unknown'.
+
+df.incidents <- sqldf::sqldf("SELECT 1 AS iid, `FlightDate`, `Aircraft..Make.Model`,`Effect..Indicated.Damage`, `When..Phase.of.flight`,`Airport..Name`,`Aircraft..Airline.Operator`, `Origin.State` FROM BirdStrikesData",drv = "SQLite")
+n.incidents <- nrow(df.incidents)
+df.incidents[,1] <- seq(1, n.incidents)
+for(r in 1:n.incidents){
+  if(df.incidents$Airport..Name[r] == ''){
+    df.incidents$Airport..Name[r] = 'Unknown'
+  }
+  if(df.incidents$Aircraft..Airline.Operator[r] == ''){
+    df.incidents$Aircraft..Airline.Operator[r] = 'Unknown'
+  }
+}
+
+# Normalize the space value ''
+
+for(r in 1:n.incidents){
+  if(df.incidents$When..Phase.of.flight[r] == 'Take-off run'){
+    df.incidents$When..Phase.of.flight[r] = 'takeoff'
+  }
+  else if(df.incidents$When..Phase.of.flight[r] == 'Approach' | df.incidents$When..Phase.of.flight[r] == 'Landing Roll'){
+    df.incidents$When..Phase.of.flight[r] = 'landing'
+  }
+  else if(df.incidents$When..Phase.of.flight[r] == 'Climb' | df.incidents$When..Phase.of.flight[r] == 'Descent'){
+    df.incidents$When..Phase.of.flight[r] = 'inflight'
+  }
+  else{
+    df.incidents$When..Phase.of.flight[r] = 'unknown'
+  }
+}
+
+for(r in 1:n.incidents){
+  if(nchar(df.incidents$FlightDate[r]) == 15){
+    df.incidents$FlightDate[r] = substr(df.incidents$FlightDate[r],1,10)
+  }
+  else if(nchar(df.incidents$FlightDate[r]) == 14){
+    df.incidents$FlightDate[r] = substr(df.incidents$FlightDate[r],1,9)
+  }
+  else{
+    df.incidents$FlightDate[r] = substr(df.incidents$FlightDate[r],1,8)
+  }
+}
+
+colnames(df.incidents)[2] <- 'date'
+colnames(df.incidents)[3] <- 'aircraft'
+colnames(df.incidents)[4] <- 'impact'
+colnames(df.incidents)[5] <- 'flightPhase'
+colnames(df.incidents)[6] <- 'arrPort'
+colnames(df.incidents)[7] <- 'airline'
+colnames(df.incidents)[8] <- 'state'
+
+for (r in 1:n.incidents){
+  if(df.incidents$arrPort[r] == "CHICAGO O'HARE INTL ARPT"){
+    df.incidents$arrPort[r] = "CHICAGO O HARE INTL ARPT"
+  }
+  else if(df.incidents$arrPort[r] == "KINGS LAND O' LAKES ARPT"){
+    df.incidents$arrPort[r] = "KINGS LAND O LAKES ARPT"
+  }
+  else if(df.incidents$arrPort[r] == "DAVID'S ARPT"){
+    df.incidents$arrPort[r] = "DAVID S ARPT"
+  }
+  else if(df.incidents$arrPort[r] == "LEE'S SUMMIT MUNICIPAL ARPT"){
+    df.incidents$arrPort[r] = "LEE S SUMMIT MUNICIPAL ARPT"
+  }
+}
+
+# Normalize the attribute `When..Phase.of.flight` and `FlightDate` to insert into the database correctly
+
+df.incidents
+
+sqlCode1 <- "insert into airlines values "
+
+for (i in 1:n.airlines){
+  aid <- df.airlines[i,1]
+  airline <- df.airlines[i,2]
+  
+  sqlCode1 <- paste0(sqlCode1,"(",aid,",","'N/A'",",","'",airline,"')")
+  if (i < n.airlines){
+    sqlCode1 <- paste0(sqlCode1, ",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode1)
+
+# Export to table airlines in MySQL
+
+sqlCode2 <- "insert into airports values "
+
+for (i in 1:n.airports){
+  pid <- df.airports[i,1]
+  name <- df.airports[i,2]
+  state <- df.airports[i,3]
+  
+  sqlCode2 <- paste0(sqlCode2,"(",pid,",","'","N/A","'",",","'",name,"'",",","'","N/A","'",",","'",state,"'",",","'","N/A","'",")")
+  if (i < n.airports){
+    sqlCode2 <- paste0(sqlCode2,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode2)
+
+# Export to table airports in MySQL
+
+sqlCode3 <- "insert into incidents values "
+
+for (i in 1:5000){
+  iid <- df.incidents[i,1]
+  date <- df.incidents[i,2]
+  aircraft <- df.incidents[i,3]
+  impact <- df.incidents[i,4]
+  flightPhase <- df.incidents[i,5]
+  depPort <- df.incidents[i,6]
+  arrPort <- df.incidents[i,6]
+  airline <- df.incidents[i,7]
+  state <- df.incidents[i,8]
+  
+  sqlCode3 <- paste0(sqlCode3,"(",iid,",","'",date,"'",",","'",depPort,"'",",","'",arrPort,"'",",","'",airline,"'",",","'",aircraft,"'",",","'",state,"'",",","'",flightPhase,"'",",","'",impact,"')")
+  if(i < 5000){
+    sqlCode3 <- paste0(sqlCode3,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode3)
+
+sqlCode4 <- "insert into incidents values "
+
+for (i in 5001:10000){
+  iid <- df.incidents[i,1]
+  date <- df.incidents[i,2]
+  aircraft <- df.incidents[i,3]
+  impact <- df.incidents[i,4]
+  flightPhase <- df.incidents[i,5]
+  depPort <- df.incidents[i,6]
+  arrPort <- df.incidents[i,6]
+  airline <- df.incidents[i,7]
+  state <- df.incidents[i,8]
+  
+  sqlCode4 <- paste0(sqlCode4,"(",iid,",","'",date,"'",",","'",depPort,"'",",","'",arrPort,"'",",","'",airline,"'",",","'",aircraft,"'",",","'",state,"'",",","'",flightPhase,"'",",","'",impact,"')")
+  if(i < 10000){
+    sqlCode4 <- paste0(sqlCode4,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode4)
+
+sqlCode5 <- "insert into incidents values "
+
+for (i in 10001:15000){
+  iid <- df.incidents[i,1]
+  date <- df.incidents[i,2]
+  aircraft <- df.incidents[i,3]
+  impact <- df.incidents[i,4]
+  flightPhase <- df.incidents[i,5]
+  depPort <- df.incidents[i,6]
+  arrPort <- df.incidents[i,6]
+  airline <- df.incidents[i,7]
+  state <- df.incidents[i,8]
+  
+  sqlCode5 <- paste0(sqlCode5,"(",iid,",","'",date,"'",",","'",depPort,"'",",","'",arrPort,"'",",","'",airline,"'",",","'",aircraft,"'",",","'",state,"'",",","'",flightPhase,"'",",","'",impact,"')")
+  if(i < 15000){
+    sqlCode5 <- paste0(sqlCode5,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode5)
+
+sqlCode6 <- "insert into incidents values "
+
+for (i in 15001:20000){
+  iid <- df.incidents[i,1]
+  date <- df.incidents[i,2]
+  aircraft <- df.incidents[i,3]
+  impact <- df.incidents[i,4]
+  flightPhase <- df.incidents[i,5]
+  depPort <- df.incidents[i,6]
+  arrPort <- df.incidents[i,6]
+  airline <- df.incidents[i,7]
+  state <- df.incidents[i,8]
+  
+  sqlCode6 <- paste0(sqlCode6,"(",iid,",","'",date,"'",",","'",depPort,"'",",","'",arrPort,"'",",","'",airline,"'",",","'",aircraft,"'",",","'",state,"'",",","'",flightPhase,"'",",","'",impact,"')")
+  if(i < 20000){
+    sqlCode6 <- paste0(sqlCode6,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode6)
+
+sqlCode7 <- "insert into incidents values "
+
+for (i in 20001:n.incidents){
+  iid <- df.incidents[i,1]
+  date <- df.incidents[i,2]
+  aircraft <- df.incidents[i,3]
+  impact <- df.incidents[i,4]
+  flightPhase <- df.incidents[i,5]
+  depPort <- df.incidents[i,6]
+  arrPort <- df.incidents[i,6]
+  airline <- df.incidents[i,7]
+  state <- df.incidents[i,8]
+  
+  sqlCode7 <- paste0(sqlCode7,"(",iid,",","'",date,"'",",","'",depPort,"'",",","'",arrPort,"'",",","'",airline,"'",",","'",aircraft,"'",",","'",state,"'",",","'",flightPhase,"'",",","'",impact,"')")
+  if(i < n.incidents){
+    sqlCode7 <- paste0(sqlCode7,",")
+  }
+}
+
+dbSendQuery(dbcon,sqlCode7)
+
+# Set batch as 5000 and export to table incidents in MySQL in batch
+```
+
+/* Task 3 */
+/* I choose to populate the unknown values as "N/A". */
+/* Show table airports */
+```{sql connection=dbcon}
+SELECT * FROM airports
+```
+/* Show table airlines */
+```{sql connection=dbcon}
+SELECT * FROM airlines
+```
+/* Show table incidents */
+```{sql connection=dbcon}
+SELECT * FROM incidents
+```
+
+/* Task 4 */
+```{sql connection=dbcon}
+SELECT airline, COUNT(*) AS numberStrike FROM incidents WHERE flightPhase = "landing" AND arrPort LIKE "%LaGuardia%" GROUP BY airline 
+```
+
+/* Task 5 */
+/* It is assumed that neither "GOVERNMENT" nor "UNKNOWN" is a commercial airline. */
+```{sql connection=dbcon}
+SELECT COUNT(*) AS numberMaxStrike, arrPort AS airport FROM incidents WHERE airline <> "GOVERNMENT" AND airline <> "BUSINESS" AND airline <> "UNKNOWN" AND airline <> "PRIVATELY OWNED" AND airline <> "MILITARY" GROUP BY arrPort ORDER BY numberMaxStrike DESC LIMIT 1
+```
+
+/* Task 6 */
+```{sql connection=dbcon}
+SELECT COUNT(*) AS numberStrike, YEAR(str_to_date(idate,'%m/%d/%Y')) AS year FROM incidents WHERE YEAR(str_to_date(idate,'%m/%d/%Y')) <> 0 GROUP BY YEAR(str_to_date(idate,'%m/%d/%Y')) ORDER BY year 
+```
+
+/* Task 7 */
+```{r}
+library(ggplot2)
+
+sqlCmd_chart <- "SELECT COUNT(*) AS numberStrike, YEAR(str_to_date(idate,'%m/%d/%Y')) AS year FROM incidents WHERE YEAR(str_to_date(idate,'%m/%d/%Y')) <> 0 GROUP BY YEAR(str_to_date(idate,'%m/%d/%Y')) ORDER BY year"
+
+chart_frame_original <- dbGetQuery(dbcon,sqlCmd_chart)
+
+chart_frame <- chart_frame_original[6:12,] # Select years from 2005 to 2011
+
+year <- chart_frame$year
+number <- chart_frame$numberStrike
+data <- data.frame(year,number)
+
+ggplot(data, aes(x = year, y = number)) + geom_line(color = "#69b3b1", size = 2, alpha = 0.9, linetype = 1)+ ggtitle("Number of Bird Strikes Incidents Per Year from 2005 to 2011") + geom_point() + theme(plot.title = element_text(hjust = 0.5))
+```
+
+/* Task 8 */
+```{r}
+query1 <- "DROP PROCEDURE IF EXISTS remove_incident"
+dbSendQuery(dbcon,query1)
+
+query2 <- "CREATE PROCEDURE remove_incident(IN print_id INT) BEGIN DELETE FROM incidents WHERE iid = print_id; END"
+dbSendQuery(dbcon,query2)
+
+# I decide to remove the incident whose iid is 1
+
+query3 <- "CALL remove_incident(1)"
+dbSendQuery(dbcon,query3)
+
+# Activate this stored procedure
+
+query4 <- "SELECT * FROM incidents"
+resultSet <- dbGetQuery(dbcon,query4)
+
+resultSet
+
+# We can find that the row whose iid is 1 had been removed
+```
+

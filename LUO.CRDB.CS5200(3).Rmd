@@ -1,0 +1,65 @@
+---
+title: "Assignment"
+output:
+  html_document:
+    df_print: paged
+---
+
+
+```{r}
+library(RSQLite)
+
+fpath = "C:/Users/11099/Downloads/"
+dbfile = "MediaDB.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(),paste0(fpath,dbfile))
+```
+
+/* Q1 */
+```{r}
+sqlCmd_1 = "SELECT * FROM invoice_items"
+rs = dbGetQuery(dbcon,sqlCmd_1)
+rs$ExtPrice <- rs$Quantity * rs$UnitPrice
+round(mean(rs$ExtPrice),2)
+```
+
+/* Q2 */
+```{r}
+library(sqldf)
+
+result1 <- sqldf("SELECT invoiceID, SUM(ExtPrice) AS total, COUNT(*) AS number FROM rs GROUP BY invoiceID")
+
+result1
+```
+
+/* Q3 */
+```{r}
+plot(x = result1$number, y =result1$total, xlab = "number", ylab = "total amount")
+```
+
+/* Q4 */
+```{r}
+library(sqldf)
+
+sqlcmd_ext = "ALTER TABLE invoices DROP DiscPrice"
+dbSendQuery(dbcon,sqlcmd_ext)
+sqlcmd_2 = "ALTER TABLE invoices ADD DiscPrice NUMERIC"
+dbSendQuery(dbcon,sqlcmd_2)
+
+sqlCmd_3 = "SELECT * FROM invoices"
+result2 = dbGetQuery(dbcon,sqlCmd_3)
+
+result2$number = result1$number
+result3 <- suppressWarnings(sqldf(c("UPDATE result2 SET DiscPrice = ROUND(Total * 0.9,2) WHERE number > 5","UPDATE result2 SET DiscPrice = Total WHERE number <= 5","SELECT * FROM result2")))
+
+dbWriteTable(dbcon,"invoices",result3,overwrite = TRUE)
+```
+
+/* Q5 */
+```{r}
+sqlCmd_final = "SELECT * FROM invoices"
+rs2 = dbGetQuery(dbcon,sqlCmd_final)
+rs2
+```
+
+

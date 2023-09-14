@@ -1,0 +1,100 @@
+---
+title: "Assignment"
+output:
+  html_document:
+    df_print: paged
+  pdf_document: default
+---
+
+```{r}
+library(RSQLite)
+
+fpath = "C:/Users/11099/Downloads"
+dbfile = "MediaDB.db"
+
+dbcon <- dbConnect(RSQLite::SQLite(), paste0(fpath, dbfile))
+```
+
+```{sql connection=dbcon}
+PRAGMA foreign_keys = ON
+```
+
+/* Create table */
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Course;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Course(
+Cnumber TEXT PRIMARY KEY,
+title TEXT NOT NULL,
+lengthinDays INTEGER NOT NULL
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Lesson;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Lesson(
+tid INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+lengthinHrs INTEGER NOT NULL,
+subject TEXT NOT NULL,
+CONSTRAINT subject CHECK (subject IN ('ML', 'SQL', 'R', 'Java'))
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Unit;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Unit(
+Unumber TEXT,
+tid INTEGER NOT NULL,
+CONSTRAINT Unumber FOREIGN KEY(Unumber) REFERENCES Course(Cnumber) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT tid FOREIGN KEY(tid) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+PRIMARY KEY (Unumber, tid)
+);
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Pre_Info;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Pre_Info(
+This_Lesson_id INTEGER,
+Pre_Lesson_id INTEGER,
+CONSTRAINT This_Lesson_id FOREIGN KEY(This_Lesson_id) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT Pre_Lesson_id FOREIGN KEY(Pre_Lesson_id) REFERENCES Lesson(tid) ON DELETE CASCADE ON UPDATE CASCADE
+PRIMARY KEY (This_Lesson_id, Pre_Lesson_id)
+);
+```
+
+/* Create a trigger */
+/* An error will be reported when input course's title that do not contain the 'NEU' */
+```{sql connection=dbcon}
+CREATE TRIGGER check_NEU
+BEFORE INSERT ON Course
+BEGIN
+  SELECT
+    CASE
+      WHEN NEW.title NOT LIKE '%NEU%'
+      THEN RAISE (ABORT, 'Invalid course')
+    END;
+END;
+```
+
+/* Test */
+```{sql connection=dbcon}
+INSERT INTO Course (Cnumber,title,lengthinDays)
+VALUES 
+("01","NEU-SQL DESIGN",90),
+("02","NEU-SOFTWARE ENGINEERING",90),
+("03","NEU-ADVANCED ALGEBRA",80),
+("04","MIT-ADVANCED ALGEBRA",80);
+```
+

@@ -1,0 +1,85 @@
+---
+title: "Assignment"
+output: html_notebook
+---
+/* Q1 */
+https://lucid.app/lucidchart/1e3708ae-5515-4528-af6e-0d786a1cad71/edit?viewport_loc=271%2C-53%2C1579%2C740%2C0_0&invitationId=inv_edbaf726-3cde-4d89-aa4e-a75e00fec54f
+/* Q2 */
+```{r}
+library(RSQLite)
+library(DBI)
+
+dbcon <- dbConnect(RSQLite::SQLite(),":memory:")
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Book
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Book(
+author TEXT NOT NULL,
+title TEXT NOT NULL,
+genre TEXT NOT NULL,
+price DOUBLE NOT NULL,
+pDate TEXT NOT NULL,
+description TEXT NOT NULL,
+edition INT NOT NULL,
+bid TEXT,
+PRIMARY KEY(bid)
+)
+```
+/* Q3 */
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "Books-v3.xml"
+fpn = paste0(path, fn)
+
+df <- xmlToDataFrame(fpn)
+df$price <- as.numeric(df$price)
+df$edition <- as.numeric(df$edition)
+colnames(df)[5] <- 'pDate'
+
+xmlObj <- xmlParse(fpn)
+r <- xmlRoot(xmlObj)
+numPO <- xmlSize(r)
+
+for (i in 1:numPO){
+  aPO <- r[[i]]
+  a <- xmlAttrs(aPO)
+  bid <- a[1]
+  df$bid[i] <- bid
+}
+df
+```
+/* Q4 */
+```{r}
+dbWriteTable(dbcon,"Book",df,overwrite = TRUE)
+```
+/* Q5 /
+/* A */
+```{sql connection=dbcon}
+SELECT COUNT(*) AS number_of_genres FROM (SELECT COUNT(*) AS num_b FROM Book
+GROUP BY genre)
+WHERE num_b > 3
+```
+/* B */
+```{sql connection=dbcon}
+SELECT pDate FROM Book
+ORDER BY pDate DESC
+LIMIT 1
+```
+/* C */
+```{sql connection=dbcon}
+SELECT COUNT(bid) AS number_books, AVG(price) AS average_price, genre  FROM Book
+GROUP BY genre
+```
+/* D */
+```{sql connection=dbcon}
+SELECT title, author FROM Book
+WHERE price < 0.8 * (SELECT AVG(price) FROM Book) OR price > 1.2 * (SELECT AVG(price) FROM Book)
+```
+
+

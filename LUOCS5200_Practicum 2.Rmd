@@ -1,0 +1,608 @@
+---
+title: "Practicum 2"
+output:
+  html_document:
+    df_print: paged
+---
+/* Part 1 */
+Q1 - ERD
+https://lucid.app/lucidchart/1e3708ae-5515-4528-af6e-0d786a1cad71/edit?viewport_loc=20%2C111%2C1579%2C815%2C0_0&invitationId=inv_edbaf726-3cde-4d89-aa4e-a75e00fec54f
+Q2
+```{r}
+library(RSQLite)
+library(DBI)
+
+dbcon <- dbConnect(RSQLite::SQLite(),":memory:")
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Articles;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Articles_Authors;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Journals;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Authors;
+```
+/* I treat journals with different volumes and issues as different journals, but consider the title when calculating the number of articles published in a journal */
+```{sql connection=dbcon}
+CREATE TABLE Journals(
+jid INTEGER PRIMARY KEY,
+title TEXT NOT NULL,
+volume INTEGER NOT NULL,
+issue INTEGER NOT NULL,
+pubDate TEXT NOT NULL
+)
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Authors(
+aid INTEGER PRIMARY KEY,
+firstname TEXT NOT NULL,
+lastname TEXT NOT NULL,
+initial TEXT NOT NULL,
+affiliation TEXT NOT NULL
+)
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Articles(
+pmid INTEGER PRIMARY KEY,
+articleTitle TEXT NOT NULL,
+dateCreated TEXT NOT NULL,
+jid INTEGER NOT NULL,
+CONSTRAINT jid FOREIGN KEY(jid) REFERENCES Journals(jid) ON DELETE CASCADE ON UPDATE CASCADE
+)
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Articles_Authors(
+pmid INTEGER NOT NULL,
+aid INTEGER NOT NULL,
+CONSTRAINT pmid FOREIGN KEY(pmid) REFERENCES Articles(pmid) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT aid FOREIGN KEY(aid) REFERENCES Authors(aid) ON DELETE CASCADE ON UPDATE CASCADE
+PRIMARY KEY (pmid,aid)
+)
+```
+Q3 
+```{r}
+library(XML)
+
+path <- "C:/Users/11099/Downloads/"
+fn <- "pubmed_sample.xml"
+fpn = paste0(path, fn)
+
+xmlDOM <- xmlParse(file = fpn)
+r <- xmlRoot(xmlDOM)
+num <- xmlSize(r)
+```
+
+```{r}
+Journals.df <- data.frame (jid = integer(),
+                           title = character(),
+                           volume = integer(),
+                           issue = integer(),
+                           pubDate = character(),
+                           stringsAsFactors = F)
+
+Articles.df <- data.frame (pmid = vector (mode = "integer",length = num),
+                           articleTitle = vector (mode = "character",length = num),
+                           dateCreated = vector (mode = "character",length = num),
+                           jid = vector (mode = "integer",length = num),
+                           stringsAsFactors = F)
+
+Authors.df <- data.frame (aid = integer(),
+                          firstname = character(),
+                          lastname = character(),
+                          initial = character(),
+                          affiliation = character(),
+                          stringsAsFactors = F)
+
+Articles_Authors.df <- data.frame (pmid = integer(),
+                                   aid = integer(),
+                                   stringsAsFactors = F)
+```
+
+```{r}
+rowExists <- function (aRow, aDF){
+  
+  n <- nrow(aDF) 
+  c <- ncol(aDF) 
+  
+  if (n == 0){
+    return(0)
+  }
+  
+  for (a in 1:n){
+    if (all(aDF[a,] == aRow[1,])){
+      return(a)
+    }
+  }
+  
+  return(0)
+}
+
+adjustJournals <- function (Journals.df){
+  
+  Journals.df$volume <- as.numeric(Journals.df$volume)
+  Journals.df$issue <- as.numeric(Journals.df$issue)
+  
+  Journals.df$pubDate[1] <- 20120731
+  Journals.df$pubDate[2] <- 20130531
+  Journals.df$pubDate[3] <- 20121130
+  Journals.df$pubDate[4] <- 20121130
+  Journals.df$pubDate[5] <- 20130131
+  Journals.df$pubDate[6] <- 20130131
+  Journals.df$pubDate[7] <- 20121231
+  Journals.df$pubDate[8] <- 20120731
+  Journals.df$pubDate[9] <- 20120831
+  Journals.df$pubDate[10] <- 20120430
+  Journals.df$pubDate[11] <- 20120531
+  Journals.df$pubDate[12] <- 20120531
+  Journals.df$pubDate[13] <- 20120131
+  Journals.df$pubDate[14] <- 20120630
+  Journals.df$pubDate[15] <- 20120531
+  Journals.df$pubDate[16] <- 20120630
+  Journals.df$pubDate[17] <- 20120330
+  Journals.df$pubDate[18] <- 20120930
+  Journals.df$pubDate[19] <- 20120229
+  
+  Journals.df$pubDate <- as.numeric(Journals.df$pubDate)
+  
+  return(Journals.df)
+  
+}
+```
+
+```{r}
+parseJournals <- function (anJournalNode){
+  
+  title <- xmlValue(anJournalNode[[3]])
+  volume <- xmlValue(anJournalNode[[2]][[1]])
+  issue <- xmlValue(anJournalNode[[2]][[2]])
+  
+  pubDate <- xpathSApply(anJournalNode, "./JournalIssue/PubDate", xmlValue)
+  pubDate_MedlineDate <- xpathSApply(anJournalNode, "./JournalIssue/PubDate/MedlineDate", xmlValue)
+  pubDate_Year <- xpathSApply(anJournalNode, "./JournalIssue/PubDate/Year", xmlValue)
+  pubDate_Month <- xpathSApply(anJournalNode, "./JournalIssue/PubDate/Month", xmlValue)
+  
+  if (length(pubDate_Year) == 0 && length(pubDate_Month) == 0){
+    pubDate <- pubDate_MedlineDate
+  }
+  else{
+    pubDate <- paste(pubDate_Year,pubDate_Month)
+  }
+  
+  newJournals.df <- data.frame(title, volume, issue, pubDate, stringsAsFactors = F)
+  
+  return (newJournals.df)
+}
+```
+
+```{r}
+parseAuthorList <- function (anAuthorListNode){
+  
+  newAuthor.df <- data.frame(firstname = character(),
+                             lastname = character(),
+                             initial = character(),
+                             affiliation = character(),
+                             stringsAsFactors = F)
+  n_list <- xmlSize(anAuthorListNode)
+  
+  for(m in 1:n_list){
+    anAuthor <- anAuthorListNode[[m]]
+    firstname <- xmlValue(anAuthor[[2]])
+    lastname <- xmlValue(anAuthor[[1]])
+    initial <- xmlValue(anAuthor[[3]])
+    affiliation <- xpathSApply(anAuthor, "./Affiliation", xmlValue)
+    if (length(affiliation) == 0){
+      affiliation <- "N/A"
+    }
+      
+    newAuthor.df[m,1] <- firstname
+    newAuthor.df[m,2] <- lastname
+    newAuthor.df[m,3] <- initial
+    newAuthor.df[m,4] <- affiliation
+  }
+  
+  return (newAuthor.df)
+}
+```
+
+```{r}
+# Populate Journals.df, Articles.def and Authors.df
+for (i in 1:num){
+  
+  searchNode <- r[[i]][[1]]
+  pmid <- xpathSApply(searchNode,"./PMID",xmlValue)
+  Articles.df$pmid[i] <- pmid
+  articleTitle <- xpathApply(searchNode,"./Article/ArticleTitle",xmlValue)
+  
+  Articles.df$articleTitle[i] <- articleTitle
+  dateCreated <- xpathSApply(searchNode,"./DateCreated",xmlValue)
+  Articles.df$dateCreated[i] <- dateCreated
+  
+  issn <- xpathSApply(searchNode,"./Article/Journal/ISSN",xmlValue)
+  
+  if(i == 17 || i == 7){
+    Journals_Set <- parseJournals(searchNode[[4]][[1]])
+  }
+  else{
+    Journals_Set <- parseJournals(searchNode[[5]][[1]])
+  }
+  pk.Addr <- rowExists(Journals_Set, Journals.df[,2:ncol(Journals.df)])
+  
+  if(pk.Addr == 0){
+    pk.Addr <- nrow(Journals.df) + 1
+    Journals.df[pk.Addr,2:ncol(Journals.df)] <- Journals_Set[1,]
+    Journals.df[pk.Addr,1] <- pk.Addr
+  }
+  Articles.df$jid[i] <- pk.Addr
+  
+  if(i == 2 || i == 5){
+    Authors_Set <- parseAuthorList(searchNode[[5]][[7]])
+  }
+  else if(i == 7){
+    Authors_Set <- parseAuthorList(searchNode[[4]][[7]])
+  }
+  else if(i == 17){
+    Authors_Set <- parseAuthorList(searchNode[[4]][[6]])
+  }
+  else{
+    Authors_Set <- parseAuthorList(searchNode[[5]][[6]])
+  }
+  
+  for(k in 1:nrow(Authors_Set)){
+    pk.Addr2 <- rowExists(Authors_Set[k,], Authors.df[,2:ncol(Authors.df)])
+    if(pk.Addr2 == 0){
+     pk.Addr2 <- nrow(Authors.df) + 1
+     Authors.df[pk.Addr2,2:ncol(Authors.df)] <- Authors_Set[k,]
+     Authors.df[pk.Addr2,1] <- pk.Addr2
+    }
+  }
+}
+
+# Populate Articles_Authors.df
+for (i in 1:num){
+  
+  searchNode <- r[[i]][[1]]
+  pmid <- xpathSApply(searchNode,"./PMID",xmlValue)
+  #Articles_Authors.df$pmid[i] <- pmid
+  
+  if(i == 2 || i == 5){
+    Authors_Set <- parseAuthorList(searchNode[[5]][[7]])
+  }
+  else if(i == 7){
+    Authors_Set <- parseAuthorList(searchNode[[4]][[7]])
+  }
+  else if(i == 17){
+    Authors_Set <- parseAuthorList(searchNode[[4]][[6]])
+  }
+  else{
+    Authors_Set <- parseAuthorList(searchNode[[5]][[6]])
+  }
+  
+  for(k in 1:nrow(Authors_Set)){
+    pk.Addr2 <- rowExists(Authors_Set[k,], Authors.df[,2:ncol(Authors.df)])
+    Articles_Authors.df[pk.Addr2,1] <- pmid
+    Articles_Authors.df[pk.Addr2,2] <- pk.Addr2
+  }
+}
+
+# Adjustment.
+# Make the pubDate the last day of the month.
+# If the pubDate is a range, take the last day of the middle month.
+# Treat journals with different volumes and issues as different journals.
+# The format of each date is YearMonthDay.
+
+Journals.df <- adjustJournals(Journals.df)
+Articles.df$pmid <- as.numeric(Articles.df$pmid)
+Articles.df$articleTitle <- as.character(Articles.df$articleTitle)
+Articles_Authors.df$pmid <- as.numeric(Articles_Authors.df$pmid)
+Articles_Authors.df$aid <- as.numeric(Articles_Authors.df$aid)
+Articles.df$dateCreated[1] <- "20120620"
+Articles.df$dateCreated <- as.numeric(Articles.df$dateCreated)
+```
+
+```{r}
+dbWriteTable(dbcon,"Journals",Journals.df,overwrite = TRUE)
+dbWriteTable(dbcon,"Authors",Authors.df,overwrite = TRUE)
+dbWriteTable(dbcon,"Articles",Articles.df,overwrite = TRUE)
+dbWriteTable(dbcon,"Articles_Authors",Articles_Authors.df,overwrite = TRUE)
+```
+/* Part 2 */
+Star Schema in ERD 
+https://lucid.app/lucidchart/88df1a29-3d60-4fac-bbab-fe91d897ca49/edit?viewport_loc=-11%2C-11%2C1685%2C815%2C0_0&invitationId=inv_3372c3dc-7acd-4cab-a929-b1b21e80a901
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS Days;
+```
+
+```{sql connection=dbcon}
+DROP TABLE IF EXISTS JournalFactTable;
+```
+
+```{sql connection=dbcon}
+CREATE TABLE Days(
+day_id INTEGER PRIMARY KEY,
+year INTEGER NOT NULL,
+month INTEGER NOT NULL,
+day INTEGER NOT NULL,
+quarter INTEGER NOT NULL
+)
+```
+
+```{sql connection=dbcon}
+CREATE TABLE JournalFactTable(
+jid INTEGER,
+pmid INTEGER,
+pubday_id INTEGER NOT NULL,
+numArticles INTEGER NOT NULL,
+daysElapsed INTEGER NOT NULL,
+CONSTRAINT jid FOREIGN KEY(jid) REFERENCES Journals(jid) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT pmid FOREIGN KEY(pmid) REFERENCES Articles(pmid) ON DELETE CASCADE ON UPDATE CASCADE
+CONSTRAINT pubDay_id FOREIGN KEY(pubDay_id) REFERENCES Days(day_id) ON DELETE CASCADE ON UPDATE CASCADE
+)
+```
+
+```{r}
+Days.df <- data.frame (day_id = integer(),
+                       year = integer(),
+                       month = integer(),
+                       day = integer(),
+                       quarter = integer(),
+                       stringsAsFactors = F)
+```
+
+```{r}
+# Populate Days
+count = 1
+for (yc in 2011:2013){
+  if (yc == 2012){
+    for (mc in 1:12){
+      if (mc == 1 || mc == 3 || mc == 5 || mc == 7 || mc == 8 || mc == 10 || mc == 12){
+        for (dc in 1:31){
+          if (mc >= 1 && mc <= 3){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 1
+            count = count + 1
+          }
+          else if (mc >= 4 && mc <= 6){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 2
+            count = count + 1
+          }
+          else if (mc >= 7 && mc <= 9){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 3
+            count = count + 1
+          }
+          else{
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 4
+            count = count + 1
+          }
+        }
+      }
+      else if (mc == 4 || mc == 6 || mc == 9 || mc == 11){
+        for (dc in 1:30){
+          if (mc >= 1 && mc <= 3){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 1
+            count = count + 1
+          }
+          else if (mc >= 4 && mc <= 6){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 2
+            count = count + 1
+          }
+          else if (mc >= 7 && mc <= 9){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 3
+            count = count + 1
+          }
+          else{
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 4
+            count = count + 1
+          }
+        }
+      }
+      else{
+        for (dc in 1:29){
+          Days.df[count,1] <- count
+          Days.df[count,2] <- yc
+          Days.df[count,3] <- mc
+          Days.df[count,4] <- dc
+          Days.df[count,5] <- 1
+          count = count + 1
+        }
+      }
+    }
+  }
+  else{
+    for (mc in 1:12){
+      if (mc == 1 || mc == 3 || mc == 5 || mc == 7 || mc == 8 || mc == 10 || mc == 12){
+        for (dc in 1:31){
+          if (mc >= 1 && mc <= 3){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 1
+            count = count + 1
+          }
+          else if (mc >= 4 && mc <= 6){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 2
+            count = count + 1
+          }
+          else if (mc >= 7 && mc <= 9){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 3
+            count = count + 1
+          }
+          else{
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 4
+            count = count + 1
+          }
+        }
+      }
+      else if (mc == 4 || mc == 6 || mc == 9 || mc == 11){
+        for (dc in 1:30){
+          if (mc >= 1 && mc <= 3){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 1
+            count = count + 1
+          }
+          else if (mc >= 4 && mc <= 6){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 2
+            count = count + 1
+          }
+          else if (mc >= 7 && mc <= 9){
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 3
+            count = count + 1
+          }
+          else{
+            Days.df[count,1] <- count
+            Days.df[count,2] <- yc
+            Days.df[count,3] <- mc
+            Days.df[count,4] <- dc
+            Days.df[count,5] <- 4
+            count = count + 1
+          }
+        }
+      }
+      else{
+        for (dc in 1:28){
+          Days.df[count,1] <- count
+          Days.df[count,2] <- yc
+          Days.df[count,3] <- mc
+          Days.df[count,4] <- dc
+          Days.df[count,5] <- 1
+          count = count + 1
+        }
+      }
+    }
+  }
+}
+```
+
+```{r}
+dbWriteTable(dbcon,"Days",Days.df,overwrite = TRUE)
+```
+
+```{r}
+JournalFactTable.df <- data.frame (jid = integer(),
+                                   pmid = integer(),
+                                   pubDay_id = integer(),
+                                   numArticles = integer(),
+                                   daysElapsed = integer(),
+                                   stringsAsFactors = F)
+```
+
+```{r}
+# Populate JournalFactTable
+for (i in 1:nrow(Articles.df)){
+  
+  JournalFactTable.df[i,2] <- Articles.df$pmid[i]
+  JournalFactTable.df[i,1] <- Articles.df$jid[i]
+  
+  creDate <- as.character(Articles.df$dateCreated[i])
+  pubDate <- as.character(Journals.df$pubDate[Articles.df$jid[i]])
+  jTitle <- Journals.df$title[Articles.df$jid[i]]
+  
+  count = 1
+  for ( k in 1:ncol(Journals.df)){
+    if (Journals.df$title[k] == jTitle){
+      count = count + 1
+    }
+  }
+  JournalFactTable.df[i,4] <- count
+  
+  year <- as.numeric(substr(pubDate,1,4))
+  month <- as.numeric(substr(pubDate,5,6))
+  day <- as.numeric(substr(pubDate,7,8))
+  
+  pubDay_id <- rowExists(data.frame(year,month,day),Days.df[,2:4])
+  JournalFactTable.df[i,3] <- pubDay_id
+  
+  begin <- as.Date(creDate,"%Y%m%d")
+  end <- as.Date(pubDate,"%Y%m%d")
+  daysElapsed <- difftime(end,begin,units = "days")
+  JournalFactTable.df[i,5] <- as.numeric(daysElapsed)
+}
+```
+
+```{r}
+dbWriteTable(dbcon,"JournalFactTable",JournalFactTable.df,overwrite = TRUE)
+```
+/* Part 3 */
+From the result set we can see the average elapsed time for each quarter of the year for all journals appeared in the pubmed_sample.xml 
+```{sql connection=dbcon}
+SELECT AVG(daysElapsed) AS average_of_daysElapsed,year,quarter FROM JournalFactTable 
+INNER JOIN Days ON Days.day_id = JournalFactTable.pubDay_id
+GROUP BY year,quarter
+```
+
+```{r}
+library(ggplot2)
+
+yValue <- c(36.0000,57.3333,32.2500,41.0000,27.5000,88.0000)
+xValue <- c(1:6)
+
+plot(xValue,yValue,xaxt="n",col="red",pch=22,bg="yellow",xlim=c(1,6),ylim=c(0,110),lwd=2,cex.main=1,xlab="Quarter",ylab="Days",main = "the Average Days Elapsed for All Journals per Quarter",)
+axis(1,c(1,2,3,4,5,6),labels=c("2012 Q1","2012 Q2","2012 Q3","2012 Q4","2013 Q1","2013 Q2"))
+lines(xValue,yValue,col="DarkTurquoise",lty=1)
+```
+
